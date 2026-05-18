@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minecraft 速疊練習 - 指令優化版</title>
+    <style>
+        :root {
+            --glass-bg: rgba(20, 20, 20, 0.7);
+            --glass-border: rgba(255, 255, 255, 0.15);
+            --accent-color: #fbff00;
+        }
+        body { margin: 0; overflow: hidden; background-color: #87CEEB; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; user-select: none; }
+        #game-canvas { width: 100vw; height: 100vh; display: block; cursor: crosshair; }
+        
+        /* 座標 HUD */
+        #coords-hud {
+            position: absolute; top: 15px; left: 15px;
+            color: #eee; font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px; z-index: 150;
+            background: var(--glass-bg); 
+            backdrop-filter: blur(5px);
+            padding: 8px 12px; border-radius: 8px;
+            border: 1px solid var(--glass-border);
+        }
+        #coords-hud span { color: var(--accent-color); font-weight: bold; }
+
+        /* 十字準心 */
+        #crosshair {
+            position: absolute; top: 50%; left: 50%; width: 18px; height: 18px;
+            transform: translate(-50%, -50%); pointer-events: none; z-index: 100;
+        }
+        #crosshair::before, #crosshair::after { content: ''; position: absolute; background-color: white; mix-blend-mode: difference; }
+        #crosshair::before { top: 8px; left: 0; width: 18px; height: 2px; }
+        #crosshair::after { top: 0; left: 8px; width: 2px; height: 18px; }
+
+        /* 聊天視窗 */
+        #chat-container {
+            position: absolute; bottom: 100px; left: 20px; width: 450px;
+            display: none; flex-direction: column; z-index: 600;
+        }
+        #chat-log {
+            background: var(--glass-bg); 
+            backdrop-filter: blur(8px);
+            color: #f0f0f0; padding: 12px;
+            max-height: 200px; overflow-y: auto; font-size: 14px;
+            margin-bottom: 8px; border-radius: 8px; 
+            border: 1px solid var(--glass-border);
+            pointer-events: none;
+        }
+        #suggestion-box {
+            background: rgba(0,0,0,0.85); color: var(--accent-color); padding: 6px 12px;
+            font-size: 12px; font-family: 'Consolas', monospace; min-height: 20px;
+            margin-bottom: 5px; border-radius: 4px; border-left: 4px solid var(--accent-color);
+        }
+        #chat-input {
+            background: rgba(10, 10, 10, 0.95); border: 2px solid #555; color: white;
+            padding: 12px 15px; outline: none; width: 100%; box-sizing: border-box;
+            font-family: 'Consolas', monospace; font-size: 16px; border-radius: 8px;
+        }
+
+        /* 幫助說明視窗 */
+        #help-modal {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: rgba(20, 20, 20, 0.95); border: 2px solid var(--accent-color);
+            color: white; padding: 30px; border-radius: 15px; z-index: 1000;
+            display: none; width: 85%; max-width: 500px;
+            box-shadow: 0 0 40px rgba(0,0,0,1);
+        }
+        #help-modal h2 { color: var(--accent-color); margin-top: 0; border-bottom: 1px solid #444; padding-bottom: 10px; }
+        #help-modal ul { list-style: none; padding: 0; }
+        #help-modal li { margin-bottom: 12px; font-size: 14px; line-height: 1.6; }
+        #help-modal code { background: #444; padding: 2px 6px; border-radius: 4px; color: #fbff00; font-family: monospace; }
+
+        /* 選單與設定視窗 */
+        #start-screen, #settings-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(15, 15, 15, 0.85); display: flex; flex-direction: column;
+            align-items: center; justify-content: center; color: white; z-index: 500;
+            backdrop-filter: blur(10px);
+        }
+        #settings-screen { display: none; }
+        .settings-box { 
+            background: #222; padding: 30px; border: 1px solid #444; 
+            width: 90%; max-width: 450px; text-align: center; border-radius: 15px;
+        }
+
+        .input-group { margin: 18px 0; display: flex; align-items: center; justify-content: space-between; }
+        input[type="number"], textarea { 
+            padding: 8px 12px; border-radius: 6px; border: 1px solid #444; 
+            background: #333; color: white; font-family: monospace;
+        }
+        textarea { width: 100%; height: 100px; resize: none; margin-top: 15px; font-size: 12px; }
+
+        button { 
+            padding: 12px 24px; font-size: 15px; cursor: pointer; 
+            background-color: #388e3c; color: white; border: none; 
+            border-bottom: 4px solid #1b5e20; border-radius: 6px; transition: 0.1s;
+        }
+        button:hover { background-color: #43a047; }
+        button:active { border-bottom: 0; transform: translateY(2px); }
+
+        /* 熱鍵欄 */
+        #ui-layer {
+            position: absolute; bottom: 30px; left: 0; right: 0;
+            pointer-events: none; display: flex; flex-direction: column; align-items: center;
+            z-index: 100;
+        }
+        #hotbar-container { 
+            display: flex; gap: 4px; background: var(--glass-bg); 
+            padding: 6px; border-radius: 12px; border: 1px solid var(--glass-border);
+            backdrop-filter: blur(10px); pointer-events: auto;
+        }
+        .slot { 
+            width: 52px; height: 52px; background: rgba(255,255,255,0.1); 
+            border: 2px solid transparent; position: relative; 
+            display: flex; align-items: center; justify-content: center; 
+            border-radius: 8px; cursor: pointer; transition: all 0.1s;
+        }
+        .slot.selected { 
+            border-color: #fff; background: rgba(255,255,255,0.25); 
+            transform: scale(1.1); box-shadow: 0 0 15px rgba(255,255,255,0.3);
+        }
+        .item-icon { width: 34px; height: 34px; pointer-events: none; }
+        
+        .icon-wool { background: #fff; border: 1px solid #ddd; border-radius: 4px; }
+        .icon-egg { background: #fdf5e6; border-radius: 50% 50% 50% 50% / 70% 70% 40% 40%; border: 1px solid #ccc; }
+        .icon-tnt { background: linear-gradient(45deg, #f44336, #b71c1c); border: 2px solid #000; border-radius: 4px; }
+        .icon-fireball { background: radial-gradient(circle at 30% 30%, #ffeb3b, #f57c00 70%); border-radius: 50%; }
+        .icon-pearl { background: radial-gradient(circle at 30% 30%, #4db6ac, #004d40 80%); border-radius: 50%; }
+
+        .stack-count { position: absolute; bottom: 2px; right: 4px; color: white; font-weight: bold; font-size: 12px; text-shadow: 1px 1px 2px black; }
+        #message-box { 
+            position: absolute; top: 20%; left: 50%; transform: translateX(-50%); 
+            color: #fbff00; font-weight: bold; font-size: 20px; text-shadow: 0 0 10px rgba(0,0,0,1); 
+            pointer-events: none; opacity: 0; transition: opacity 0.3s; z-index: 300; 
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+    <div id="coords-hud">X: <span id="val-x">0.0</span> Y: <span id="val-y">0.0</span> Z: <span id="val-z">0.0</span></div>
+    <div id="message-box"></div>
+
+    <!-- 開始/暫停頁面 -->
+    <div id="start-screen">
+        <h1 id="screen-title" style="margin-bottom: 5px;">Minecraft 橋樑蛋練習</h1>
+        <p id="screen-subtitle" style="color: #aaa; margin-bottom: 30px;">指令開啟修正版</p>
+        <div style="text-align: center; font-size: 14px; line-height: 1.8; margin-bottom: 30px; background: rgba(255,255,255,0.05); padding: 20px; border-radius: 10px;">
+            移動：WASD | 跳躍：Space<br>
+            開啟指令：<b style="color: var(--accent-color);">/ (斜線鍵)</b><br>
+            暫停與選單：<b>ESC</b> | 設定選單：F | 快速補給：E
+        </div>
+        <button id="start-btn">進入世界</button>
+    </div>
+
+    <!-- 指令說明視窗 -->
+    <div id="help-modal">
+        <h2>指令與說明</h2>
+        <ul>
+            <li><code>/fill x1 y1 z1 x2 y2 z2 [type]</code> - 填充區域。支援 <code>~</code> 相對座標。類型: wool, grass, tnt, air。</li>
+            <li><code>/tp x y z</code> - 傳送玩家至目標座標。</li>
+            <li><code>/spawn</code> - 回到出生點。</li>
+            <li><code>/clear</code> - 清除所有手動放置的方塊。</li>
+            <li><code>/help</code> - 再次顯示此說明視窗。</li>
+        </ul>
+        <hr style="border: 0; border-top: 1px solid #444; margin: 15px 0;">
+        <p style="font-size: 12px; color: #aaa; text-align: center;">按下 Enter 執行或 ESC 退出指令模式</p>
+        <button id="help-close-btn" style="width: 100%;">我知道了</button>
+    </div>
+
+    <div id="settings-screen">
+        <div class="settings-box">
+            <h2 style="margin-top: 0;">遊戲設定</h2>
+            <div class="input-group">
+                <label>放置距離 (Reach):</label>
+                <input type="number" id="reach-input" value="5" min="2" max="10">
+            </div>
+            <div class="input-group">
+                <label>目標距離 (Dist):</label>
+                <input type="number" id="dist-input" value="45" min="10" max="200">
+            </div>
+            <hr style="border: 0; border-top: 1px solid #444; margin: 20px 0;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <button onclick="exportWorld()" style="background:#555; border-bottom-color: #333;">匯出數據</button>
+                <button onclick="importWorld()" style="background:#555; border-bottom-color: #333;">匯入數據</button>
+            </div>
+            <textarea id="io-textarea" placeholder="在此貼上或複製地圖 JSON 數據..."></textarea>
+            <button id="close-settings" style="width: 100%; margin-top: 25px;">完成設定 [F]</button>
+        </div>
+    </div>
+
+    <div id="chat-container">
+        <div id="chat-log"></div>
+        <div id="suggestion-box"></div>
+        <input type="text" id="chat-input" placeholder="輸入指令..." autocomplete="off">
+    </div>
+
+    <div id="crosshair"></div>
+    <div id="ui-layer"><div id="hotbar-container"></div></div>
+    <canvas id="game-canvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('game-canvas');
+        const startScreen = document.getElementById('start-screen');
+        const screenTitle = document.getElementById('screen-title');
+        const screenSubtitle = document.getElementById('screen-subtitle');
+        const startBtn = document.getElementById('start-btn');
+        const settingsScreen = document.getElementById('settings-screen');
+        const chatContainer = document.getElementById('chat-container');
+        const chatInput = document.getElementById('chat-input');
+        const chatLog = document.getElementById('chat-log');
+        const suggestBox = document.getElementById('suggestion-box');
+        const helpModal = document.getElementById('help-modal');
+        const helpCloseBtn = document.getElementById('help-close-btn');
+        const reachInput = document.getElementById('reach-input');
+        const distInput = document.getElementById('dist-input');
+        const ioTextarea = document.getElementById('io-textarea');
+        const hotbarContainer = document.getElementById('hotbar-container');
+        const msgBox = document.getElementById('message-box');
+        
+        let isGameRunning = false;
+        let isPaused = true;
+        let isSettingsOpen = false;
+        let isChatOpen = false;
+        let isHelpOpen = false;
+        let maxReach = 5;
+        let targetDistance = 45;
+        let spawnPos = new THREE.Vector3(0, 2, 0);
+        let lastLockAttempt = 0;
+
+        let commandHistory = [];
+        let historyIndex = -1;
+
+        const initialInventory = [
+            { type: 'wool', count: 64 }, { type: 'egg', count: 16 },
+            { type: 'tnt', count: 16 }, { type: 'fireball', count: 16 },
+            { type: 'pearl', count: 16 }, { type: 'empty', count: 0 },
+            { type: 'empty', count: 0 }, { type: 'empty', count: 0 }, { type: 'empty', count: 0 }
+        ];
+        let inventory = JSON.parse(JSON.stringify(initialInventory));
+        let selectedSlot = 0;
+
+        function requestSafePointerLock() {
+            const now = Date.now();
+            if (now - lastLockAttempt < 1500) return;
+            if (isPaused || isChatOpen || isSettingsOpen || isHelpOpen) return;
+            lastLockAttempt = now;
+            try { canvas.requestPointerLock(); } catch (e) {}
+        }
+
+        function updateUI() {
+            hotbarContainer.innerHTML = '';
+            inventory.forEach((slot, index) => {
+                const slotDiv = document.createElement('div');
+                slotDiv.className = `slot ${index === selectedSlot ? 'selected' : ''}`;
+                slotDiv.onclick = () => { 
+                    if(!isChatOpen && !isPaused && !isHelpOpen) { 
+                        selectedSlot = index; updateUI(); 
+                        requestSafePointerLock();
+                    } 
+                };
+                if (slot.type !== 'empty') {
+                    const icon = document.createElement('div');
+                    icon.className = `item-icon icon-${slot.type}`;
+                    slotDiv.appendChild(icon);
+                    if (slot.count > 1) {
+                        const count = document.createElement('div');
+                        count.className = 'stack-count';
+                        count.innerText = slot.count;
+                        slotDiv.appendChild(count);
+                    }
+                }
+                hotbarContainer.appendChild(slotDiv);
+            });
+        }
+
+        function addChat(text, color = "white") {
+            const entry = document.createElement('div');
+            entry.style.color = color;
+            entry.style.marginBottom = "3px";
+            entry.innerText = text;
+            chatLog.appendChild(entry);
+            chatLog.scrollTop = chatLog.scrollHeight;
+        }
+
+        function showMsg(txt) { msgBox.innerText = txt; msgBox.style.opacity = 1; setTimeout(() => msgBox.style.opacity = 0, 1500); }
+
+        function openHelp() {
+            isHelpOpen = true;
+            helpModal.style.display = 'block';
+            document.exitPointerLock();
+        }
+
+        function closeHelp() {
+            isHelpOpen = false;
+            helpModal.style.display = 'none';
+            if (!isPaused && !isChatOpen && !isSettingsOpen) requestSafePointerLock();
+        }
+
+        helpCloseBtn.onclick = closeHelp;
+
+        const keys = {};
+        window.addEventListener('keydown', e => {
+            // 處理 Esc 邏輯
+            if (e.code === 'Escape') {
+                if (isHelpOpen) { closeHelp(); return; }
+                if (isChatOpen) { closeChat(); return; }
+                if (isSettingsOpen) { toggleSettings(); return; }
+                togglePause();
+                return;
+            }
+
+            // 聊天視窗邏輯
+            if (isChatOpen) {
+                if (e.code === 'Enter') {
+                    processCommand();
+                    e.preventDefault();
+                } else if (e.code === 'ArrowUp') {
+                    e.preventDefault();
+                    if (commandHistory.length > 0) {
+                        historyIndex = Math.min(historyIndex + 1, commandHistory.length - 1);
+                        chatInput.value = commandHistory[commandHistory.length - 1 - historyIndex];
+                        updateSuggestions();
+                    }
+                } else if (e.code === 'ArrowDown') {
+                    e.preventDefault();
+                    if (historyIndex > 0) {
+                        historyIndex--;
+                        chatInput.value = commandHistory[commandHistory.length - 1 - historyIndex];
+                    } else {
+                        historyIndex = -1;
+                        chatInput.value = '';
+                    }
+                    updateSuggestions();
+                }
+                return;
+            }
+
+            if (isHelpOpen && e.code === 'Enter') { closeHelp(); return; }
+            if (e.code === 'KeyF') { toggleSettings(); return; }
+            
+            // 只有按下 / 鍵才會開啟聊天框
+            if (e.key === '/' && !isPaused && !isHelpOpen && !isSettingsOpen) {
+                e.preventDefault();
+                openChat();
+                return;
+            }
+            
+            if (isSettingsOpen || isPaused || isHelpOpen) return;
+            
+            keys[e.code] = true;
+            if (e.code === 'KeyE') fillInventory();
+            if (e.key >= '1' && e.key <= '9') { selectedSlot = parseInt(e.key) - 1; updateUI(); }
+        });
+
+        window.addEventListener('keyup', e => keys[e.code] = false);
+
+        window.addEventListener('wheel', e => {
+            if (isSettingsOpen || isChatOpen || isPaused || isHelpOpen) return;
+            if (e.deltaY > 0) selectedSlot = (selectedSlot + 1) % 9;
+            else selectedSlot = (selectedSlot - 1 + 9) % 9;
+            updateUI();
+        });
+
+        function togglePause() {
+            if (!isGameRunning) return;
+            isPaused = !isPaused;
+            if (isPaused) {
+                document.exitPointerLock();
+                screenTitle.innerText = "遊戲暫停中";
+                screenSubtitle.innerText = "點擊下方按鈕回到遊戲";
+                startBtn.innerText = "回到遊戲";
+                startScreen.style.display = 'flex';
+            } else {
+                startScreen.style.display = 'none';
+            }
+        }
+
+        document.addEventListener('pointerlockchange', () => {
+            if (document.pointerLockElement !== canvas && !isChatOpen && !isSettingsOpen && !isHelpOpen && isGameRunning) {
+                if (!isPaused) {
+                    isPaused = true;
+                    screenTitle.innerText = "遊戲暫停中";
+                    screenSubtitle.innerText = "指標鎖定已失效";
+                    startBtn.innerText = "回到遊戲";
+                    startScreen.style.display = 'flex';
+                }
+            }
+        });
+
+        function openChat() {
+            isChatOpen = true;
+            chatContainer.style.display = 'flex';
+            document.exitPointerLock();
+            historyIndex = -1;
+            chatInput.value = '/'; 
+            setTimeout(() => { chatInput.focus(); updateSuggestions(); }, 10);
+        }
+
+        function closeChat() {
+            isChatOpen = false;
+            chatContainer.style.display = 'none';
+            chatInput.value = '';
+            suggestBox.innerText = '';
+            if (!isPaused && !isHelpOpen && !isSettingsOpen) requestSafePointerLock();
+        }
+
+        chatInput.oninput = () => updateSuggestions();
+
+        const commandsList = ['/fill', '/clear', '/tp', '/spawn', '/help'];
+        const blockTypes = ['wool', 'grass', 'tnt', 'air', 'end'];
+
+        function updateSuggestions() {
+            const val = chatInput.value.toLowerCase();
+            if (!val.startsWith('/')) { suggestBox.innerText = '請以 / 開頭輸入指令'; return; }
+            const parts = val.split(' ');
+            const cmd = parts[0];
+            if (parts.length === 1) {
+                const matches = commandsList.filter(c => c.startsWith(cmd));
+                suggestBox.innerText = matches.length > 0 ? matches.join(' | ') : "未知指令";
+            } else if (cmd === '/fill') {
+                if (parts.length <= 7) suggestBox.innerText = "/fill <x1> <y1> <z1> <x2> <y2> <z2> [類型]";
+                else {
+                    const blockPart = parts[7] || "";
+                    const matches = blockTypes.filter(b => b.startsWith(blockPart));
+                    suggestBox.innerText = "方塊類型: " + (matches.length > 0 ? matches.join(', ') : "不支援");
+                }
+            } else if (cmd === '/tp') suggestBox.innerText = "/tp <x> <y> <z>";
+            else suggestBox.innerText = "";
+        }
+
+        function parseCoord(val, current) {
+            if (val === undefined) return NaN;
+            if (val.startsWith('~')) {
+                const offset = parseFloat(val.substring(1)) || 0;
+                return current + offset;
+            }
+            return parseFloat(val);
+        }
+
+        function processCommand() {
+            const cmd = chatInput.value.trim();
+            if (!cmd) { closeChat(); return; }
+            
+            if (commandHistory[commandHistory.length - 1] !== cmd) {
+                commandHistory.push(cmd);
+                if (commandHistory.length > 50) commandHistory.shift();
+            }
+            
+            addChat("> " + cmd, "#fbff00");
+            const parts = cmd.split(/\s+/);
+            const baseCmd = parts[0].toLowerCase();
+            
+            if (baseCmd === '/help') {
+                closeChat();
+                openHelp();
+                return;
+            }
+            
+            if (baseCmd === '/fill') {
+                if (parts.length >= 7) {
+                    const x1 = Math.round(parseCoord(parts[1], player.pos.x));
+                    const y1 = Math.round(parseCoord(parts[2], player.pos.y));
+                    const z1 = Math.round(parseCoord(parts[3], player.pos.z));
+                    const x2 = Math.round(parseCoord(parts[4], player.pos.x));
+                    const y2 = Math.round(parseCoord(parts[5], player.pos.y));
+                    const z2 = Math.round(parseCoord(parts[6], player.pos.z));
+                    const type = parts[7] || 'wool';
+                    if (isNaN(x1) || isNaN(y1) || isNaN(z1) || isNaN(x2) || isNaN(y2) || isNaN(z2)) {
+                        addChat("座標格式錯誤", "#ff5555");
+                    } else {
+                        const minX = Math.min(x1, x2), maxX = Math.max(x1, x2);
+                        const minY = Math.min(y1, y2), maxY = Math.max(y1, y2);
+                        const minZ = Math.min(z1, z2), maxZ = Math.max(z1, z2);
+                        const volume = (maxX - minX + 1) * (maxY - minY + 1) * (maxZ - minZ + 1);
+                        if (volume > 16384) {
+                            addChat(`填充範圍太大 (${volume} > 16384，避免卡頓)`, "#ff5555");
+                        } else {
+                            let count = 0;
+                            for (let x = minX; x <= maxX; x++) {
+                                for (let y = minY; y <= maxY; y++) {
+                                    for (let z = minZ; z <= maxZ; z++) {
+                                        if (type === 'air') {
+                                            const mesh = worldMeshes.find(m => Math.round(m.position.x) === x && Math.round(m.position.y) === y && Math.round(m.position.z) === z);
+                                            if (mesh && removeBlock(mesh)) count++;
+                                        } else if (addBlock(x, y, z, type)) count++;
+                                    }
+                                }
+                            }
+                            addChat(`成功填充了 ${count} 個方塊`, "#55ff55");
+                        }
+                    }
+                } else addChat("用法: /fill <x1> <y1> <z1> <x2> <y2> <z2> [類型]", "#ff5555");
+            } else if (baseCmd === '/tp') {
+                const nx = parseCoord(parts[1], player.pos.x);
+                const ny = parseCoord(parts[2], player.pos.y);
+                const nz = parseCoord(parts[3], player.pos.z);
+                if (!isNaN(nx) && !isNaN(ny) && !isNaN(nz)) {
+                    player.pos.set(nx, ny, nz); player.vel.set(0, 0, 0);
+                    addChat(`傳送到 ${nx.toFixed(1)}, ${ny.toFixed(1)}, ${nz.toFixed(1)}`, "#55ff55");
+                } else addChat("用法: /tp <x> <y> <z>", "#ff5555");
+            } else if (baseCmd === '/clear') {
+                [...worldBlocks].forEach(b => { if(!b.isStatic) removeBlock(b.mesh); });
+                addChat("已清除所有放置的方塊", "#55ff55");
+            } else if (baseCmd === '/spawn') {
+                player.pos.copy(spawnPos); player.vel.set(0,0,0);
+                addChat("傳送至出生點", "#55ff55");
+            } else {
+                addChat("未知指令，請輸入 /help", "#ff5555");
+            }
+            closeChat();
+        }
+
+        function fillInventory() { inventory = JSON.parse(JSON.stringify(initialInventory)); updateUI(); showMsg("補給已滿"); }
+
+        function toggleSettings() {
+            if (isChatOpen || isHelpOpen) return;
+            isSettingsOpen = !isSettingsOpen;
+            if (isSettingsOpen) { document.exitPointerLock(); settingsScreen.style.display = 'flex'; }
+            else { 
+                maxReach = parseFloat(reachInput.value) || 5; 
+                if (targetDistance !== parseInt(distInput.value)) { targetDistance = parseInt(distInput.value) || 45; resetWorld(); }
+                settingsScreen.style.display = 'none'; 
+                if (!isPaused) requestSafePointerLock();
+            }
+        }
+
+        function resetWorld() {
+            inventory = JSON.parse(JSON.stringify(initialInventory)); updateUI(); initLevel(); 
+            player.pos.set(0, 2, 0); spawnPos.set(0, 2, 0); player.vel.set(0, 0, 0);
+        }
+
+        function exportWorld() {
+            const data = worldBlocks.filter(b => !b.isStatic).map(b => ({ x: b.x, y: b.y, z: b.z, type: b.type }));
+            ioTextarea.value = JSON.stringify(data); ioTextarea.select(); document.execCommand('copy');
+            showMsg("數據已複製到剪貼簿");
+        }
+
+        function importWorld() {
+            try {
+                const data = JSON.parse(ioTextarea.value);
+                [...worldBlocks].forEach(b => { if(!b.isStatic) removeBlock(b.mesh); });
+                data.forEach(b => addBlock(b.x, b.y, b.z, b.type)); showMsg("數據導入完成");
+            } catch (e) { showMsg("格式錯誤"); }
+        }
+
+        // --- Three.js 核心與遊戲循環 ---
+        const scene = new THREE.Scene(); 
+        scene.background = new THREE.Color(0x87CEEB);
+        scene.fog = new THREE.Fog(0x87CEEB, 20, 120);
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+        scene.add(new THREE.AmbientLight(0xffffff, 0.45));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.65);
+        dirLight.position.set(30, 60, 30);
+        dirLight.castShadow = true;
+        dirLight.shadow.camera.left = -40;
+        dirLight.shadow.camera.right = 40;
+        dirLight.shadow.camera.top = 40;
+        dirLight.shadow.camera.bottom = -40;
+        dirLight.shadow.mapSize.width = 1024;
+        dirLight.shadow.mapSize.height = 1024;
+        scene.add(dirLight);
+
+        function createMat(color) {
+            const c = document.createElement('canvas'); c.width = 64; c.height = 64;
+            const ctx = c.getContext('2d'); ctx.fillStyle = color; ctx.fillRect(0,0,64,64);
+            ctx.strokeStyle = 'rgba(0,0,0,0.15)'; ctx.strokeRect(0,0,64,64);
+            const tex = new THREE.CanvasTexture(c); tex.magFilter = THREE.NearestFilter;
+            return new THREE.MeshLambertMaterial({ map: tex });
+        }
+        const mats = { 
+            wool: createMat('#ffffff'), grass: createMat('#4CAF50'), end: createMat('#f44336'), 
+            bedHead: createMat('#ffffff'), bedBody: createMat('#d32f2f'), 
+            tnt: createMat('#f44336'), tntActive: createMat('#ffffff'), air: null,
+            cloud: new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8 })
+        };
+
+        let worldBlocks = []; let worldMeshes = []; let activeProjectiles = []; let activeTnts = []; let cloudMeshes = [];
+        const blockGeo = new THREE.BoxGeometry(1, 1, 1);
+        const player = { 
+            pos: new THREE.Vector3(0, 2, 0), vel: new THREE.Vector3(0,0,0), yaw: 0, pitch: 0, onGround: false, 
+            getAABB: function(p = this.pos) { return new THREE.Box3(new THREE.Vector3(p.x-0.3, p.y-0.9, p.z-0.3), new THREE.Vector3(p.x+0.3, p.y+0.9, p.z+0.3)); } 
+        };
+
+        function addBlock(x, y, z, type = 'wool', isStatic = false) {
+            const rx = Math.round(x), ry = Math.round(y), rz = Math.round(z);
+            if (worldBlocks.some(b => b.x === rx && b.y === ry && b.z === rz)) return null;
+            const bAABB = new THREE.Box3(new THREE.Vector3(rx-0.5, ry-0.5, rz-0.5), new THREE.Vector3(rx+0.5, ry+0.5, rz+0.5));
+            if (type !== 'tnt' && player.getAABB().intersectsBox(bAABB)) return null;
+            const mesh = new THREE.Mesh(blockGeo, mats[type] || mats.wool);
+            mesh.position.set(rx, ry, rz); 
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            scene.add(mesh);
+            const data = { x: rx, y: ry, z: rz, type, mesh, isStatic, aabb: bAABB, isSolid: (type !== 'tnt'), vel: new THREE.Vector3(0, 0, 0) };
+            worldBlocks.push(data); worldMeshes.push(mesh);
+            if (type === 'tnt') activeTnts.push({ data, fuse: 3.5, timer: 0 });
+            return data;
+        }
+
+        function removeBlock(mesh) {
+            const block = worldBlocks.find(b => b.mesh === mesh);
+            if (block && !block.isStatic) {
+                if (block.type.startsWith('bed')) { showMsg("床被拆除！地圖重置"); setTimeout(resetWorld, 500); return false; }
+                scene.remove(block.mesh); 
+                worldMeshes = worldMeshes.filter(m => m !== mesh); 
+                worldBlocks = worldBlocks.filter(b => b !== block); 
+                activeTnts = activeTnts.filter(t => t.data !== block);
+                return true;
+            }
+            return false;
+        }
+
+        function handleInteraction(isRightClick) {
+            if (!isGameRunning || isSettingsOpen || isChatOpen || isPaused || isHelpOpen) return;
+            const item = inventory[selectedSlot];
+            const ray = new THREE.Raycaster(); ray.setFromCamera(new THREE.Vector2(0,0), camera);
+            const hits = ray.intersectObjects(worldMeshes);
+            if (isRightClick) {
+                if (hits.length > 0 && hits[0].distance < maxReach) {
+                    const block = worldBlocks.find(b => b.mesh === hits[0].object);
+                    const p = block.mesh.position.clone().add(hits[0].face.normal).round();
+                    if (item.type === 'wool' && item.count > 0) { if(addBlock(p.x, p.y, p.z, 'wool')){ item.count--; updateUI(); } }
+                    else if (item.type === 'tnt' && item.count > 0) { if(addBlock(p.x, p.y, p.z, 'tnt')){ item.count--; updateUI(); } }
+                    else if (item.type !== 'empty' && item.count > 0) { throwItem(item.type); item.count--; updateUI(); }
+                } else if (item.type !== 'empty' && item.count > 0 && !['wool', 'tnt'].includes(item.type)) {
+                    throwItem(item.type); item.count--; updateUI();
+                }
+            } else if (hits.length > 0 && hits[0].distance < maxReach) removeBlock(hits[0].object);
+        }
+
+        function throwItem(type) {
+            let color = 0x004d40; let radius = 0.18;
+            if (type === 'fireball') color = 0xff4500;
+            if (type === 'egg') { color = 0xfdf5e6; radius = 0.12; }
+            const mesh = new THREE.Mesh(new THREE.SphereGeometry(radius), new THREE.MeshBasicMaterial({color}));
+            mesh.position.copy(camera.position);
+            const dir = new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion);
+            scene.add(mesh);
+            activeProjectiles.push({ mesh, vel: dir.multiplyScalar(24), type, grav: 10, lastBridgePos: mesh.position.clone() });
+        }
+
+        function explode(x, y, z, power = 1.0, canDestroyBlocks = false) {
+            const pos = new THREE.Vector3(x, y, z);
+            if (player.pos.distanceTo(pos) < 6 * power) { 
+                const dir = player.pos.clone().sub(pos).normalize(); dir.y += 0.35; 
+                player.vel.add(dir.multiplyScalar(22 * power)); 
+            }
+            [...worldBlocks].forEach(b => { 
+                const dist = b.mesh.position.distanceTo(pos);
+                if (dist < 4.2 * power && !b.isStatic) {
+                    if (b.type === 'tnt') {
+                        const pushDir = b.mesh.position.clone().sub(pos).normalize();
+                        if (pushDir.lengthSq() === 0) pushDir.set(Math.random() - 0.5, 1, Math.random() - 0.5).normalize();
+                        pushDir.y += 0.5; 
+                        b.vel.add(pushDir.multiplyScalar((1 - dist / (4.2 * power)) * 25 * power));
+                    } else if (canDestroyBlocks) { removeBlock(b.mesh); }
+                }
+            });
+        }
+
+        function update(dt) {
+            document.getElementById('val-x').innerText = player.pos.x.toFixed(1);
+            document.getElementById('val-y').innerText = player.pos.y.toFixed(1);
+            document.getElementById('val-z').innerText = player.pos.z.toFixed(1);
+            
+            cloudMeshes.forEach(c => {
+                c.position.x += c.userData.speed * (dt * 60);
+                if (c.position.x > 200) c.position.x = -200;
+            });
+
+            activeProjectiles.forEach((p, i) => {
+                p.vel.y -= p.grav * dt; p.mesh.position.add(p.vel.clone().multiplyScalar(dt));
+                if (p.type === 'egg' && p.mesh.position.distanceTo(p.lastBridgePos) > 0.8) {
+                    const bPos = p.mesh.position.clone().add(new THREE.Vector3(0, -1.2, 0)).round();
+                    addBlock(bPos.x, bPos.y, bPos.z, 'wool'); p.lastBridgePos.copy(p.mesh.position);
+                }
+                const ray = new THREE.Raycaster(p.mesh.position, p.vel.clone().normalize(), 0, 0.6);
+                const hits = ray.intersectObjects(worldMeshes);
+                if (hits.length > 0) {
+                    if (p.type === 'pearl') { player.pos.copy(hits[0].point.add(hits[0].face.normal)); player.vel.set(0,0,0); }
+                    else if (p.type === 'fireball') explode(p.mesh.position.x, p.mesh.position.y, p.mesh.position.z, 1.2, false);
+                    else if (p.type === 'egg') explode(p.mesh.position.x, p.mesh.position.y, p.mesh.position.z, 0.4, false);
+                    scene.remove(p.mesh); activeProjectiles.splice(i, 1);
+                }
+                if (p.mesh.position.y < -40) { scene.remove(p.mesh); activeProjectiles.splice(i, 1); }
+            });
+
+            for (let i = activeTnts.length - 1; i >= 0; i--) {
+                const t = activeTnts[i];
+                t.fuse -= dt; t.timer += dt;
+                
+                t.data.vel.y -= 28 * dt; 
+                let nextX = t.data.mesh.position.x + t.data.vel.x * dt;
+                let nextY = t.data.mesh.position.y + t.data.vel.y * dt;
+                let nextZ = t.data.mesh.position.z + t.data.vel.z * dt;
+                
+                let tntBox = new THREE.Box3(
+                    new THREE.Vector3(nextX - 0.4, nextY - 0.4, nextZ - 0.4),
+                    new THREE.Vector3(nextX + 0.4, nextY + 0.4, nextZ + 0.4)
+                );
+                
+                let hitSolid = false;
+                for (const b of worldBlocks) {
+                    if (b.isSolid && b.mesh !== t.data.mesh) {
+                        if (Math.abs(b.x - nextX) > 1.5 || Math.abs(b.y - nextY) > 2 || Math.abs(b.z - nextZ) > 1.5) continue;
+                        if (tntBox.intersectsBox(b.aabb)) {
+                            hitSolid = true;
+                            if (t.data.vel.y < 0) nextY = b.aabb.max.y + 0.5; 
+                            break;
+                        }
+                    }
+                }
+                
+                if (hitSolid) {
+                    t.data.vel.x *= 0.5; t.data.vel.z *= 0.5; t.data.vel.y = 0;
+                }
+                
+                t.data.mesh.position.set(nextX, nextY, nextZ);
+                t.data.vel.x *= 0.98; t.data.vel.z *= 0.98; 
+                
+                t.data.x = t.data.mesh.position.x; t.data.y = t.data.mesh.position.y; t.data.z = t.data.mesh.position.z;
+                t.data.aabb.set(
+                    new THREE.Vector3(t.data.x - 0.5, t.data.y - 0.5, t.data.z - 0.5),
+                    new THREE.Vector3(t.data.x + 0.5, t.data.y + 0.5, t.data.z + 0.5)
+                );
+
+                t.data.mesh.material = Math.floor(t.timer * 8) % 2 === 0 ? mats.tntActive : mats.tnt;
+                if (t.fuse <= 0) { 
+                    explode(t.data.x, t.data.y, t.data.z, 1.6, true); 
+                    removeBlock(t.data.mesh); 
+                }
+            }
+
+            let mv = new THREE.Vector3(0,0,0);
+            if(keys['KeyW']) mv.z -= 1; if(keys['KeyS']) mv.z += 1; if(keys['KeyA']) mv.x -= 1; if(keys['KeyD']) mv.x += 1;
+            if(mv.length()>0) mv.normalize().applyAxisAngle(new THREE.Vector3(0,1,0), player.yaw);
+            
+            // 偵測是否蹲下 (Shift)
+            let isCrouching = keys['ShiftLeft'] || keys['ShiftRight'];
+            let speed = isCrouching ? 3.2 : 7.5;
+            
+            // Y 軸物理與碰撞
+            player.vel.y -= 30 * dt; 
+            let dy = player.vel.y * dt;
+            player.pos.y += dy; 
+            player.onGround = false;
+            
+            let pBox = player.getAABB();
+            for(const b of worldBlocks) { 
+                if (b.isSolid) { 
+                    if (Math.abs(b.x - player.pos.x) > 1.5 || Math.abs(b.y - player.pos.y) > 3 || Math.abs(b.z - player.pos.z) > 1.5) continue;
+                    if (pBox.intersectsBox(b.aabb)) { 
+                        if (dy <= 0) { player.pos.y = b.aabb.max.y + 0.901; player.onGround = true; player.vel.y = 0; } 
+                        else if (dy > 0) { player.pos.y = b.aabb.min.y - 0.901; player.vel.y = 0; }
+                        pBox = player.getAABB(); 
+                    } 
+                } 
+            }
+            if (keys['Space'] && player.onGround) player.vel.y = 11.5;
+            
+            // 防掉落檢查函數 (蹲下時使用)
+            function willFall(nx, ny, nz) {
+                let fallBox = new THREE.Box3(
+                    new THREE.Vector3(nx - 0.3, ny - 0.95, nz - 0.3), // 往下偵測 0.05 格
+                    new THREE.Vector3(nx + 0.3, ny - 0.85, nz + 0.3)
+                );
+                for (const b of worldBlocks) {
+                    if (b.isSolid && Math.abs(b.x - nx) <= 1.5 && Math.abs(b.y - ny) <= 3 && Math.abs(b.z - nz) <= 1.5) {
+                        if (fallBox.intersectsBox(b.aabb)) return false; // 腳下有方塊支撐
+                    }
+                }
+                return true; // 腳下無方塊，會掉落
+            }
+
+            // X 軸物理與碰撞
+            let dx = mv.x * speed * dt;
+            if (dx !== 0) {
+                if (isCrouching && player.onGround && willFall(player.pos.x + dx, player.pos.y, player.pos.z)) {
+                    dx = 0; // 邊緣防掉落停止移動
+                } else {
+                    player.pos.x += dx;
+                    pBox = player.getAABB();
+                    for(const b of worldBlocks) { 
+                        if (b.isSolid) { 
+                            if (Math.abs(b.x - player.pos.x) > 1.5 || Math.abs(b.y - player.pos.y) > 3 || Math.abs(b.z - player.pos.z) > 1.5) continue;
+                            if (pBox.intersectsBox(b.aabb)) { 
+                                if (dx > 0) player.pos.x = b.aabb.min.x - 0.301;
+                                else if (dx < 0) player.pos.x = b.aabb.max.x + 0.301;
+                                pBox = player.getAABB();
+                            } 
+                        } 
+                    }
+                }
+            }
+
+            // Z 軸物理與碰撞
+            let dz = mv.z * speed * dt;
+            if (dz !== 0) {
+                if (isCrouching && player.onGround && willFall(player.pos.x, player.pos.y, player.pos.z + dz)) {
+                    dz = 0; // 邊緣防掉落停止移動
+                } else {
+                    player.pos.z += dz;
+                    pBox = player.getAABB();
+                    for(const b of worldBlocks) { 
+                        if (b.isSolid) { 
+                            if (Math.abs(b.x - player.pos.x) > 1.5 || Math.abs(b.y - player.pos.y) > 3 || Math.abs(b.z - player.pos.z) > 1.5) continue;
+                            if (pBox.intersectsBox(b.aabb)) { 
+                                if (dz > 0) player.pos.z = b.aabb.min.z - 0.301;
+                                else if (dz < 0) player.pos.z = b.aabb.max.z + 0.301;
+                                pBox = player.getAABB();
+                            } 
+                        } 
+                    }
+                }
+            }
+
+            // 防卡死機制 (Anti-stuck)
+            let stuck = true;
+            let antiStuckLoops = 0;
+            while (stuck && antiStuckLoops < 10) {
+                stuck = false;
+                pBox = player.getAABB();
+                for(const b of worldBlocks) {
+                    if (!b.isSolid) continue;
+                    if (Math.abs(b.x - player.pos.x) > 1.5 || Math.abs(b.y - player.pos.y) > 3 || Math.abs(b.z - player.pos.z) > 1.5) continue;
+                    if (pBox.intersectsBox(b.aabb)) {
+                        player.pos.y = b.aabb.max.y + 0.901; 
+                        stuck = true;
+                        break;
+                    }
+                }
+                antiStuckLoops++;
+            }
+
+            if(player.pos.y < -30) { player.pos.copy(spawnPos); player.vel.set(0,0,0); }
+            
+            // 蹲下時視角微降 (0.5 vs 0.7)
+            let targetCamY = player.pos.y + (isCrouching ? 0.5 : 0.7);
+            camera.position.set(player.pos.x, targetCamY, player.pos.z);
+        }
+
+        canvas.addEventListener('mousedown', e => { 
+            if (isGameRunning && !isSettingsOpen && !isChatOpen && !isPaused && !isHelpOpen) {
+                if (document.pointerLockElement !== canvas) requestSafePointerLock();
+                else handleInteraction(e.button === 2); 
+            } 
+        });
+
+        canvas.addEventListener('contextmenu', e => e.preventDefault());
+        
+        document.addEventListener('mousemove', e => { 
+            if (document.pointerLockElement === canvas && !isSettingsOpen && !isChatOpen && !isPaused && !isHelpOpen) { 
+                player.yaw -= e.movementX * 0.002; 
+                player.pitch = Math.max(-Math.PI/2, Math.min(Math.PI/2, player.pitch - e.movementY * 0.002)); 
+                camera.rotation.set(player.pitch, player.yaw, 0, 'YXZ'); 
+            } 
+        });
+
+        startBtn.onclick = () => { 
+            isGameRunning = true; isPaused = false; startScreen.style.display='none'; requestSafePointerLock();
+        };
+
+        document.getElementById('close-settings').onclick = () => toggleSettings();
+
+        const clock = new THREE.Clock();
+        function initLevel() {
+            worldBlocks.forEach(b => scene.remove(b.mesh)); worldBlocks = []; worldMeshes = []; 
+            activeProjectiles.forEach(p => scene.remove(p.mesh)); activeProjectiles = []; activeTnts = [];
+            cloudMeshes.forEach(c => scene.remove(c)); cloudMeshes = [];
+            for (let i = 0; i < 20; i++) {
+                const cloud = new THREE.Mesh(new THREE.BoxGeometry(10 + Math.random() * 20, 2, 10 + Math.random() * 20), mats.cloud);
+                cloud.position.set((Math.random() - 0.5) * 300, 40 + Math.random() * 20, (Math.random() - 0.5) * 300);
+                cloud.userData = { speed: 0.05 + Math.random() * 0.1 };
+                scene.add(cloud); cloudMeshes.push(cloud);
+            }
+            for(let x=-2; x<=2; x++) for(let z=-2; z<=2; z++) addBlock(x, 0, z, 'grass', true);
+            const targetZ = -targetDistance;
+            for(let x=-2; x<=2; x++) for(let z=targetZ-2; z<=targetZ+2; z++) addBlock(x, 0, z, 'end', true);
+            addBlock(0, 1, targetZ, 'bedHead'); addBlock(0, 1, targetZ + 1, 'bedBody'); 
+        }
+
+        function animate() { 
+            requestAnimationFrame(animate); 
+            if (isGameRunning && !isSettingsOpen && !isChatOpen && !isPaused && !isHelpOpen) update(Math.min(clock.getDelta(), 0.05)); 
+            renderer.render(scene, camera); 
+        }
+        
+        initLevel(); updateUI(); animate();
+        window.addEventListener('resize', () => { 
+            camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); 
+            renderer.setSize(window.innerWidth, window.innerHeight); 
+        });
+    </script>
+</body>
+</html>
