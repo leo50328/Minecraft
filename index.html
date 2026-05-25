@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Minecraft 速疊練習 - 硬度與裂痕系統版</title>
+    <title>Minecraft 速疊練習 - 全面優化版</title>
     <style>
         :root {
             --glass-bg: rgba(20, 20, 20, 0.7);
@@ -20,7 +20,6 @@
         }
         #game-canvas { width: 100vw; height: 100vh; display: block; cursor: crosshair; }
         
-        /* 玻璃擬物共用樣式 */
         .glass-panel {
             background: var(--glass-bg);
             backdrop-filter: blur(12px);
@@ -30,7 +29,6 @@
             border-radius: 12px;
         }
 
-        /* 座標 HUD */
         #coords-hud {
             position: absolute; top: 20px; left: 20px;
             color: var(--text-main); font-family: 'Consolas', 'Monaco', monospace;
@@ -39,7 +37,6 @@
         }
         #coords-hud span { color: var(--accent-color); font-weight: bold; text-shadow: 0 0 5px var(--accent-glow); }
 
-        /* 十字準心 */
         #crosshair {
             position: absolute; top: 50%; left: 50%; width: 18px; height: 18px;
             transform: translate(-50%, -50%); pointer-events: none; z-index: 100;
@@ -48,17 +45,32 @@
         #crosshair::before { top: 8px; left: 0; width: 18px; height: 2px; }
         #crosshair::after { top: 0; left: 8px; width: 2px; height: 18px; }
 
-        /* 聊天視窗 */
+        /* 全新升級的聊天系統 UI */
         #chat-container {
-            position: absolute; bottom: 110px; left: 20px; width: 480px;
-            display: none; flex-direction: column; z-index: 600;
+            position: absolute; bottom: 100px; left: 20px; width: 480px;
+            display: flex; flex-direction: column; z-index: 600;
+            pointer-events: none;
         }
         #chat-log {
-            color: var(--text-main); padding: 15px;
-            max-height: 220px; overflow-y: auto; font-size: 14px;
-            margin-bottom: 10px; pointer-events: none;
-            text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+            color: var(--text-main); padding: 10px;
+            max-height: 250px; overflow-y: hidden; font-size: 15px;
+            margin-bottom: 5px; border-radius: 8px; 
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.9);
+            display: flex; flex-direction: column; justify-content: flex-end;
+            background: transparent; transition: background 0.3s;
         }
+        .chat-msg {
+            padding: 3px 6px; background: rgba(0,0,0,0.5);
+            border-radius: 4px; margin-top: 3px; word-wrap: break-word;
+            transition: opacity 0.5s ease;
+        }
+        .chat-msg.fade { opacity: 0; }
+        
+        #chat-input-wrapper { display: none; flex-direction: column; pointer-events: auto; }
+        #chat-container.chat-open { pointer-events: auto; }
+        #chat-container.chat-open #chat-log { background: rgba(0,0,0,0.6); overflow-y: auto; pointer-events: auto; }
+        #chat-container.chat-open .chat-msg { opacity: 1 !important; }
+
         #suggestion-box {
             background: rgba(0,0,0,0.85); color: var(--accent-color); padding: 6px 12px;
             font-size: 12px; font-family: 'Consolas', monospace; min-height: 20px;
@@ -72,7 +84,6 @@
         }
         #chat-input:focus { border-color: var(--accent-color); }
 
-        /* 幫助與設定視窗共用 */
         .modal-overlay {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(10, 10, 15, 0.8); display: none; flex-direction: column;
@@ -107,7 +118,6 @@
         button.secondary { background: linear-gradient(135deg, #666, #444); box-shadow: 0 4px 15px rgba(0,0,0,0.4); }
         button.secondary:hover { background: linear-gradient(135deg, #888, #555); box-shadow: 0 6px 20px rgba(0,0,0,0.5); }
 
-        /* 熱鍵欄 */
         #ui-layer {
             position: absolute; bottom: 30px; left: 0; right: 0;
             pointer-events: none; display: flex; flex-direction: column; align-items: center; z-index: 100;
@@ -154,41 +164,37 @@
     </div>
     <div id="message-box"></div>
 
-    <!-- 開始/暫停頁面 -->
     <div id="start-screen" class="modal-overlay" style="display: flex;">
         <div class="modal-box glass-panel" style="padding: 50px;">
             <h1 id="screen-title" style="margin: 0 0 5px 0; font-size: 28px; text-shadow: 0 2px 5px rgba(0,0,0,0.5);">Minecraft 橋樑蛋練習</h1>
-            <p id="screen-subtitle" style="color: #bbb; margin-bottom: 25px;">硬度與裂痕防爆系統 v5.0</p>
+            <p id="screen-subtitle" style="color: #bbb; margin-bottom: 25px;">指令效能與系統穩健版 v6.0</p>
             <div style="background: rgba(0,0,0,0.3); padding: 20px; border-radius: 10px; margin-bottom: 30px; font-size: 14.5px; line-height: 2;">
                 移動：<b>WASD</b> | 跳躍：<b>Space</b> | 潛行防掉：<b>Shift</b><br>
-                左鍵：<b>持續按住挖掘方塊 (裂痕視覺)</b><br>
-                右鍵：<b>放置方塊</b> | 丟棄物品：<b>Q</b> | 快速補給：<b>E</b><br>
-                開啟指令：<b style="color: var(--accent-color);">/ (斜線鍵)</b><br>
-                <span style="color: #fbff00; font-weight: bold; font-size: 13px;">🆕 新增防爆黑曜石 (Obsidian) 與真實挖掘時間系統！</span>
+                挖礦：<b>按住左鍵</b> | 放置：<b>右鍵</b> | 丟棄：<b>Q</b><br>
+                聊天：<b style="color: #55ff55;">T (對話)</b> 或 <b style="color: var(--accent-color);">/ (指令)</b><br>
+                <span style="color: #ff5555; font-weight: bold; font-size: 13px;">⚠️ 注意：任何床(Bed)被破壞將導致世界重置！</span>
             </div>
             <button id="start-btn" style="width: 100%; padding: 16px; font-size: 18px;">進入世界</button>
         </div>
     </div>
 
-    <!-- 指令說明視窗 -->
     <div id="help-modal" class="modal-overlay">
         <div class="modal-box glass-panel">
             <h2>指令與說明</h2>
             <ul>
-                <li><code>/give [type] [count]</code> - 獲得指定物品 (可給予黑曜石，不可獲取床)。</li>
-                <li><code>/fill x1 y1 z1 x2 y2 z2 [type]</code> - 填充區域。支援 <code>~</code> 相對座標 (可填床、黑曜石)。</li>
+                <li><code>/give [type] [count]</code> - 獲得指定物品 (不可獲取床)。</li>
+                <li><code>/fill x1 y1 z1 x2 y2 z2 [type]</code> - 極速填充區域，支援 <code>~</code> 座標。</li>
                 <li><code>/tp x y z</code> - 傳送玩家至目標座標。</li>
                 <li><code>/kill</code> - 自殺並回到出生點。</li>
                 <li><code>/spawn</code> - 回到出生點。</li>
                 <li><code>/clear</code> - 清除所有手動放置的方塊與掉落物。</li>
             </ul>
             <hr>
-            <p style="font-size: 12.5px; color: #aaa;">按下 Enter 執行或 ESC 退出指令模式</p>
+            <p style="font-size: 12.5px; color: #aaa;">按下 Enter 執行或 ESC 退出</p>
             <button id="help-close-btn" class="secondary">我知道了</button>
         </div>
     </div>
 
-    <!-- 設定視窗 -->
     <div id="settings-screen" class="modal-overlay">
         <div class="modal-box glass-panel">
             <h2>遊戲設定與世界管理</h2>
@@ -210,11 +216,13 @@
         </div>
     </div>
 
-    <!-- 聊天視窗 -->
+    <!-- 支援淡出的全新聊天視窗 -->
     <div id="chat-container">
-        <div id="chat-log" class="glass-panel"></div>
-        <div id="suggestion-box" class="glass-panel"></div>
-        <input type="text" id="chat-input" placeholder="輸入指令..." autocomplete="off">
+        <div id="chat-log"></div>
+        <div id="chat-input-wrapper">
+            <div id="suggestion-box" class="glass-panel"></div>
+            <input type="text" id="chat-input" placeholder="輸入訊息或指令 (/help)..." autocomplete="off">
+        </div>
     </div>
 
     <div id="crosshair"></div>
@@ -229,6 +237,7 @@
         const startBtn = document.getElementById('start-btn');
         const settingsScreen = document.getElementById('settings-screen');
         const chatContainer = document.getElementById('chat-container');
+        const chatInputWrapper = document.getElementById('chat-input-wrapper');
         const chatInput = document.getElementById('chat-input');
         const chatLog = document.getElementById('chat-log');
         const suggestBox = document.getElementById('suggestion-box');
@@ -253,7 +262,6 @@
         let commandHistory = [];
         let historyIndex = -1;
 
-        // 物品欄列表，加入了黑曜石，床依舊禁止持有
         const initialInventory = [
             { type: 'wool', count: 64 }, { type: 'obsidian', count: 16 },
             { type: 'tnt', count: 16 }, { type: 'fireball', count: 16 },
@@ -263,25 +271,27 @@
         let inventory = JSON.parse(JSON.stringify(initialInventory));
         let selectedSlot = 0;
 
-        // 方塊種類分類與屬性設定 (硬度系統與防爆屬性)
         const blockProperties = {
             wool: { hardness: 0.2, isExplosionResistant: false },
             grass: { hardness: 0.2, isExplosionResistant: false },
             tnt: { hardness: 0.25, isExplosionResistant: false },
-            obsidian: { hardness: 3.5, isExplosionResistant: true }, // 3.5秒防爆
+            obsidian: { hardness: 3.5, isExplosionResistant: true },
             bed: { hardness: 0.2, isExplosionResistant: false },
             bedHead: { hardness: 0.2, isExplosionResistant: false },
             bedBody: { hardness: 0.2, isExplosionResistant: false },
-            end: { hardness: 999, isExplosionResistant: true } // 終界石等基座不可破壞
+            end: { hardness: 999, isExplosionResistant: true }
         };
 
         const giveableTypes = ['wool', 'grass', 'tnt', 'egg', 'fireball', 'pearl', 'obsidian']; 
         const fillableTypes = ['wool', 'grass', 'tnt', 'air', 'end', 'bed', 'obsidian']; 
 
-        // 挖掘控制狀態
         let miningTarget = null;
         let miningTime = 0;
         let isMouseDownLeft = false;
+
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = 64; tempCanvas.height = 64;
+        const tempCtx = tempCanvas.getContext('2d');
 
         function requestSafePointerLock() {
             const now = Date.now();
@@ -341,11 +351,25 @@
             return remaining; 
         }
 
+        // 聊天系統：支援淡出機制
         function addChat(text, color = "white") {
             const entry = document.createElement('div');
-            entry.style.color = color; entry.style.marginBottom = "4px"; entry.innerText = text;
-            chatLog.appendChild(entry); chatLog.scrollTop = chatLog.scrollHeight;
+            entry.className = 'chat-msg';
+            entry.style.color = color; 
+            entry.innerText = text;
+            entry.dataset.time = Date.now();
+            chatLog.appendChild(entry); 
+            chatLog.scrollTop = chatLog.scrollHeight;
         }
+
+        // 全局計時器：處理聊天視窗淡出
+        setInterval(() => {
+            if (isChatOpen) return;
+            const now = Date.now();
+            document.querySelectorAll('.chat-msg').forEach(el => {
+                if (now - el.dataset.time > 8000) el.classList.add('fade');
+            });
+        }, 1000);
 
         function showMsg(txt) { msgBox.innerText = txt; msgBox.style.opacity = 1; setTimeout(() => msgBox.style.opacity = 0, 2000); }
 
@@ -388,7 +412,11 @@
 
             if (isHelpOpen && e.code === 'Enter') { closeHelp(); return; }
             if (e.code === 'KeyF') { toggleSettings(); return; }
-            if (e.key === '/' && !isPaused && !isHelpOpen && !isSettingsOpen) { e.preventDefault(); openChat(); return; }
+            
+            // 開啟指令 (/) 與 開啟聊天 (T)
+            if (e.key === '/' && !isPaused && !isHelpOpen && !isSettingsOpen) { e.preventDefault(); openChat('/'); return; }
+            if (e.key.toLowerCase() === 't' && !isPaused && !isHelpOpen && !isSettingsOpen) { e.preventDefault(); openChat(''); return; }
+            
             if (isSettingsOpen || isPaused || isHelpOpen) return;
             
             keys[e.code] = true;
@@ -400,14 +428,10 @@
                 if (item.type !== 'empty' && item.count > 0) {
                     let spawnDir = new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion);
                     spawnDroppedItem(
-                        camera.position.x + spawnDir.x * 0.5, 
-                        camera.position.y - 0.2 + spawnDir.y * 0.5, 
-                        camera.position.z + spawnDir.z * 0.5, 
-                        item.type, 
-                        spawnDir.clone().multiplyScalar(8).add(player.vel)
+                        camera.position.x + spawnDir.x * 0.5, camera.position.y - 0.2 + spawnDir.y * 0.5, camera.position.z + spawnDir.z * 0.5, 
+                        item.type, spawnDir.clone().multiplyScalar(8).add(player.vel)
                     );
-                    item.count--;
-                    if (item.count === 0) item.type = 'empty';
+                    item.count--; if (item.count === 0) item.type = 'empty';
                     updateUI();
                 }
             }
@@ -448,13 +472,26 @@
             }
         });
 
-        function openChat() {
-            isChatOpen = true; chatContainer.style.display = 'flex'; document.exitPointerLock(); resetMining();
-            historyIndex = -1; chatInput.value = '/'; setTimeout(() => { chatInput.focus(); updateSuggestions(); }, 10);
+        function openChat(initialText = '') {
+            isChatOpen = true; 
+            chatInputWrapper.style.display = 'flex';
+            chatContainer.classList.add('chat-open');
+            document.querySelectorAll('.chat-msg').forEach(el => el.classList.remove('fade'));
+            document.exitPointerLock(); resetMining();
+            historyIndex = -1; chatInput.value = initialText; 
+            setTimeout(() => { chatInput.focus(); updateSuggestions(); }, 10);
         }
 
         function closeChat() {
-            isChatOpen = false; chatContainer.style.display = 'none'; chatInput.value = ''; suggestBox.innerText = '';
+            isChatOpen = false; 
+            chatInputWrapper.style.display = 'none';
+            chatContainer.classList.remove('chat-open');
+            chatInput.value = ''; suggestBox.innerText = '';
+            // 立刻隱藏較舊的訊息
+            const now = Date.now();
+            document.querySelectorAll('.chat-msg').forEach(el => {
+                if (now - el.dataset.time > 8000) el.classList.add('fade');
+            });
             if (!isPaused && !isHelpOpen && !isSettingsOpen) requestSafePointerLock();
         }
 
@@ -463,8 +500,8 @@
         const commandsList = ['/fill', '/clear', '/tp', '/spawn', '/help', '/kill', '/give'];
 
         function updateSuggestions() {
-            const val = chatInput.value.toLowerCase();
-            if (!val.startsWith('/')) { suggestBox.innerText = '請以 / 開頭輸入指令'; return; }
+            const val = chatInput.value.trim().toLowerCase();
+            if (!val.startsWith('/')) { suggestBox.innerText = '按 Enter 發送訊息，或以 / 執行指令'; return; }
             const parts = val.split(' ');
             const cmd = parts[0];
             if (parts.length === 1) {
@@ -492,6 +529,14 @@
         function processCommand() {
             const cmd = chatInput.value.trim();
             if (!cmd) { closeChat(); return; }
+            
+            // 處理一般對話
+            if (!cmd.startsWith('/')) {
+                addChat(`<玩家> ${cmd}`, "white");
+                closeChat();
+                return;
+            }
+
             if (commandHistory[commandHistory.length - 1] !== cmd) {
                 commandHistory.push(cmd);
                 if (commandHistory.length > 50) commandHistory.shift();
@@ -501,7 +546,7 @@
             const baseCmd = parts[0].toLowerCase();
             
             if (baseCmd === '/help') {
-                closeChat(); openHelp(); return;
+                openHelp(); closeChat(); return;
             } else if (baseCmd === '/fill') {
                 if (parts.length >= 7) {
                     const x1 = Math.round(parseCoord(parts[1], player.pos.x));
@@ -524,23 +569,37 @@
                             addChat(`填充範圍太大 (${volume} > 16384，避免卡頓)`, "#ff5555");
                         } else {
                             let count = 0;
-                            for (let x = minX; x <= maxX; x++) {
-                                for (let y = minY; y <= maxY; y++) {
-                                    for (let z = minZ; z <= maxZ; z++) {
-                                        if (type === 'air') {
-                                            const mesh = worldMeshes.find(m => Math.round(m.position.x) === x && Math.round(m.position.y) === y && Math.round(m.position.z) === z);
-                                            if (mesh && removeBlock(mesh, false)) count++;
-                                        } else if (addBlock(x, y, z, type)) count++;
+                            // 效能優化：針對 /fill 的大面積方塊清除
+                            let toRemove = [];
+                            for (let b of worldBlocks) {
+                                if (!b.isStatic && b.x >= minX && b.x <= maxX && b.y >= minY && b.y <= maxY && b.z >= minZ && b.z <= maxZ) {
+                                    toRemove.push(b.mesh);
+                                }
+                            }
+                            toRemove.forEach(m => removeBlock(m, false));
+                            
+                            if (type === 'air') {
+                                count = toRemove.length;
+                            } else {
+                                // 利用 Set 優化檢查效能
+                                const existingBlocks = new Set(worldBlocks.map(b => `${b.x},${b.y},${b.z}`));
+                                for (let x = minX; x <= maxX; x++) {
+                                    for (let y = minY; y <= maxY; y++) {
+                                        for (let z = minZ; z <= maxZ; z++) {
+                                            if (!existingBlocks.has(`${x},${y},${z}`)) {
+                                                if (addBlock(x, y, z, type, false, true)) count++;
+                                            }
+                                        }
                                     }
                                 }
                             }
-                            addChat(`成功填充了 ${count} 個方塊`, "#55ff55");
+                            addChat(`成功更新了 ${count} 個方塊`, "#55ff55");
                         }
                     }
                 } else addChat("用法: /fill <x1> <y1> <z1> <x2> <y2> <z2> [類型]", "#ff5555");
             } else if (baseCmd === '/give') {
                 const type = parts[1];
-                const count = parseInt(parts[2]) || 64;
+                const count = Math.max(1, parseInt(parts[2]) || 64); // 防呆機制
                 if (giveableTypes.includes(type)) {
                     const failCount = giveItem(type, count);
                     if (failCount === 0) addChat(`給予了 ${type} * ${count}`, "#55ff55");
@@ -602,7 +661,37 @@
             } catch (e) { showMsg("格式錯誤"); }
         }
 
-        // --- Three.js 核心與遊戲循環 ---
+        // --- 16x16 像素裂痕生成矩陣（Minecraft 風格） ---
+        const crackPixelStages = [
+            [[7,7],[8,8]],
+            [[7,7],[8,8],[6,6],[9,9]],
+            [[7,7],[8,8],[6,6],[9,9],[7,8],[8,7],[5,6],[10,9]],
+            [[7,7],[8,8],[6,6],[9,9],[7,8],[8,7],[5,6],[10,9],[4,5],[11,10],[6,8],[9,7]],
+            [[7,7],[8,8],[6,6],[9,9],[7,8],[8,7],[5,6],[10,9],[4,5],[11,10],[6,8],[9,7],[3,4],[12,11],[2,3],[13,12]],
+            [[7,7],[8,8],[6,6],[9,9],[7,8],[8,7],[5,6],[10,9],[4,5],[11,10],[6,8],[9,7],[3,4],[12,11],[2,3],[13,12],[7,5],[8,10],[10,6],[5,9]],
+            [[7,7],[8,8],[6,6],[9,9],[7,8],[8,7],[5,6],[10,9],[4,5],[11,10],[6,8],[9,7],[3,4],[12,11],[2,3],[13,12],[7,5],[8,10],[10,6],[5,9],[1,2],[14,13],[6,4],[9,11],[11,5],[4,10]],
+            [[7,7],[8,8],[6,6],[9,9],[7,8],[8,7],[5,6],[10,9],[4,5],[11,10],[6,8],[9,7],[3,4],[12,11],[2,3],[13,12],[7,5],[8,10],[10,6],[5,9],[1,2],[14,13],[6,4],[9,11],[11,5],[4,10],[0,1],[15,14],[3,5],[12,10],[10,4],[5,11]],
+            [[7,7],[8,8],[6,6],[9,9],[7,8],[8,7],[5,6],[10,9],[4,5],[11,10],[6,8],[9,7],[3,4],[12,11],[2,3],[13,12],[7,5],[8,10],[10,6],[5,9],[1,2],[14,13],[6,4],[9,11],[11,5],[4,10],[0,1],[15,14],[3,5],[12,10],[10,4],[5,11],[2,1],[13,14],[1,3],[14,12],[11,3],[4,12]],
+            [[7,7],[8,8],[6,6],[9,9],[7,8],[8,7],[5,6],[10,9],[4,5],[11,10],[6,8],[9,7],[3,4],[12,11],[2,3],[13,12],[7,5],[8,10],[10,6],[5,9],[1,2],[14,13],[6,4],[9,11],[11,5],[4,10],[0,1],[15,14],[3,5],[12,10],[10,4],[5,11],[2,1],[13,14],[1,3],[14,12],[11,3],[4,12],[0,0],[15,15],[0,15],[15,0],[7,3],[8,12]]
+        ];
+
+        function drawPixelCrackOnCanvas(baseColor, stage) {
+            tempCtx.fillStyle = baseColor;
+            tempCtx.fillRect(0, 0, 64, 64);
+            tempCtx.strokeStyle = 'rgba(0,0,0,0.15)';
+            tempCtx.lineWidth = 1;
+            tempCtx.strokeRect(0, 0, 64, 64);
+
+            if (stage <= 0) return;
+            const pixelSize = 4;
+            const pixels = crackPixelStages[stage - 1];
+            tempCtx.fillStyle = 'rgba(25, 15, 10, 0.9)'; 
+            pixels.forEach(([px, py]) => {
+                tempCtx.fillRect(px * pixelSize, py * pixelSize, pixelSize, pixelSize);
+            });
+        }
+
+        // --- Three.js 核心 ---
         const scene = new THREE.Scene(); 
         scene.background = new THREE.Color(0x87CEEB);
         scene.fog = new THREE.Fog(0x87CEEB, 20, 120);
@@ -623,54 +712,11 @@
         dirLight.shadow.mapSize.width = 1024; dirLight.shadow.mapSize.height = 1024;
         scene.add(dirLight);
 
-        // 動態生成 2D 裂痕貼圖 texture (10 個等級)
-        const crackTextures = [];
-        function generateCrackTextures() {
-            for (let stage = 1; stage <= 10; stage++) {
-                const size = 128;
-                const canvasCrack = document.createElement('canvas');
-                canvasCrack.width = size; canvasCrack.height = size;
-                const ctx = canvasCrack.getContext('2d');
-                ctx.strokeStyle = 'rgba(0, 0, 0, 0.85)';
-                ctx.lineWidth = 3.5;
-                
-                // 模擬 Minecraft 挖掘裂痕形狀的碎裂線段
-                const points = [
-                    [10, 15], [30, 45], [15, 80], [60, 50], [40, 110], 
-                    [80, 20], [100, 70], [115, 110], [110, 35], [70, 80]
-                ];
-                
-                ctx.beginPath();
-                for (let i = 0; i < stage; i++) {
-                    const start = points[i];
-                    const end = points[(i + 3) % 10];
-                    ctx.moveTo(start[0], start[1]);
-                    ctx.lineTo(end[0], end[1]);
-                    // 分支線
-                    ctx.lineTo(start[0] + (end[0]-start[0])*0.5 + (Math.random()-0.5)*15, start[1] + (end[1]-start[1])*0.5 + (Math.random()-0.5)*15);
-                }
-                ctx.stroke();
-                
-                const tex = new THREE.CanvasTexture(canvasCrack);
-                tex.magFilter = THREE.NearestFilter;
-                crackTextures.push(tex);
-            }
-        }
-        generateCrackTextures();
-
-        // 挖掘覆蓋框（用於貼在被挖掘的方塊外側，避免深度衝突 z-fighting 設置極輕微向外偏移）
-        const crackDecalGeo = new THREE.BoxGeometry(1.002, 1.002, 1.002);
-        const crackDecalMat = new THREE.MeshBasicMaterial({
-            transparent: true,
-            opacity: 0.9,
-            depthWrite: false, // 避免深淺覆蓋錯誤
-            polygonOffset: true,
-            polygonOffsetFactor: -1,
-            polygonOffsetUnits: -1
-        });
-        const crackDecalMesh = new THREE.Mesh(crackDecalGeo, crackDecalMat);
-        crackDecalMesh.visible = false;
-        scene.add(crackDecalMesh);
+        const colorPalette = {
+            wool: '#ffffff', grass: '#4CAF50', end: '#f44336', 
+            bedHead: '#ffffff', bedBody: '#d32f2f', bed: '#e53935', 
+            tnt: '#f44336', tntActive: '#ffffff', obsidian: '#1d0e2e'
+        };
 
         function createMat(color) {
             const c = document.createElement('canvas'); c.width = 64; c.height = 64;
@@ -679,13 +725,15 @@
             const tex = new THREE.CanvasTexture(c); tex.magFilter = THREE.NearestFilter;
             return new THREE.MeshLambertMaterial({ map: tex });
         }
-        const mats = { 
-            wool: createMat('#ffffff'), grass: createMat('#4CAF50'), end: createMat('#f44336'), 
-            bedHead: createMat('#ffffff'), bedBody: createMat('#d32f2f'), bed: createMat('#e53935'), 
-            tnt: createMat('#f44336'), tntActive: createMat('#ffffff'), air: null,
-            obsidian: createMat('#24113e'), // 黑曜石暗紫色材質
-            cloud: new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8 })
+        
+        // 記憶體優化：所有靜止方塊共用材質
+        const sharedMats = { 
+            wool: createMat(colorPalette.wool), grass: createMat(colorPalette.grass), end: createMat(colorPalette.end), 
+            bedHead: createMat(colorPalette.bedHead), bedBody: createMat(colorPalette.bedBody), bed: createMat(colorPalette.bed), 
+            tnt: createMat(colorPalette.tnt), tntActive: createMat(colorPalette.tntActive), obsidian: createMat(colorPalette.obsidian),
+            air: null, cloud: new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8 })
         };
+        Object.values(sharedMats).forEach(m => { if (m && m.map) m.map.magFilter = THREE.NearestFilter; });
 
         let worldBlocks = []; let worldMeshes = []; let activeProjectiles = []; let activeTnts = []; let cloudMeshes = [];
         let droppedItems = [];
@@ -695,12 +743,13 @@
             getAABB: function(p = this.pos) { return new THREE.Box3(new THREE.Vector3(p.x-0.3, p.y-0.9, p.z-0.3), new THREE.Vector3(p.x+0.3, p.y+0.9, p.z+0.3)); } 
         };
 
-        function addBlock(x, y, z, type = 'wool', isStatic = false) {
+        function addBlock(x, y, z, type = 'wool', isStatic = false, skipCheck = false) {
             const rx = Math.round(x), ry = Math.round(y), rz = Math.round(z);
-            if (worldBlocks.some(b => b.x === rx && b.y === ry && b.z === rz)) return null;
+            if (!skipCheck && worldBlocks.some(b => b.x === rx && b.y === ry && b.z === rz)) return null;
             const bAABB = new THREE.Box3(new THREE.Vector3(rx-0.5, ry-0.5, rz-0.5), new THREE.Vector3(rx+0.5, ry+0.5, rz+0.5));
             if (type !== 'tnt' && player.getAABB().intersectsBox(bAABB)) return null;
-            const mesh = new THREE.Mesh(blockGeo, mats[type] || mats.wool);
+            
+            const mesh = new THREE.Mesh(blockGeo, sharedMats[type] || sharedMats.wool);
             mesh.position.set(rx, ry, rz); mesh.castShadow = true; mesh.receiveShadow = true;
             scene.add(mesh);
             const data = { x: rx, y: ry, z: rz, type, mesh, isStatic, aabb: bAABB, isSolid: (type !== 'tnt'), vel: new THREE.Vector3(0, 0, 0) };
@@ -714,7 +763,7 @@
             const radius = (type === 'egg' || type === 'fireball' || type === 'pearl') ? 0.08 : 0.15;
             const geo = (type === 'egg' || type === 'fireball' || type === 'pearl') ? new THREE.SphereGeometry(radius) : new THREE.BoxGeometry(radius*2, radius*2, radius*2);
             
-            let itemMat = mats[type] || mats.wool;
+            let itemMat = sharedMats[type] || sharedMats.wool;
             if (type === 'fireball') itemMat = new THREE.MeshBasicMaterial({color: 0xff4500});
             if (type === 'egg') itemMat = new THREE.MeshBasicMaterial({color: 0xfdf5e6});
             if (type === 'pearl') itemMat = new THREE.MeshBasicMaterial({color: 0x004d40});
@@ -731,19 +780,12 @@
         function removeBlock(mesh, shouldDrop = true) {
             const block = worldBlocks.find(b => b.mesh === mesh);
             if (block && (!block.isStatic || block.type.startsWith('bed'))) {
-                // 如果目前正在挖掘這個方塊，立即重置挖掘進度
-                if (miningTarget === block) {
-                    resetMining();
-                }
-
+                if (miningTarget === block) resetMining();
                 if (block.type.startsWith('bed')) { 
-                    showMsg("床被破壞！世界重置中..."); 
-                    setTimeout(resetWorld, 500); 
-                    return false; 
+                    showMsg("床被破壞！世界重置中..."); setTimeout(resetWorld, 500); return false; 
                 }
                 
                 if (shouldDrop) spawnDroppedItem(block.x, block.y, block.z, block.type);
-
                 scene.remove(block.mesh); 
                 worldMeshes = worldMeshes.filter(m => m !== mesh); 
                 worldBlocks = worldBlocks.filter(b => b !== block); 
@@ -753,21 +795,24 @@
             return false;
         }
 
-        // 重置挖掘進度與覆蓋框
+        // 優化記憶體配置：挖掘結束時捨棄臨時克隆材質，恢復共用材質
         function resetMining() {
+            if (miningTarget && miningTarget.mesh && miningTarget.originalMat) {
+                miningTarget.mesh.material.map.dispose();
+                miningTarget.mesh.material.dispose();
+                miningTarget.mesh.material = miningTarget.originalMat;
+                miningTarget.originalMat = null;
+            }
             miningTarget = null;
             miningTime = 0;
-            crackDecalMesh.visible = false;
         }
 
         function handleLeftClickInteraction(dt) {
             if (!isGameRunning || isSettingsOpen || isChatOpen || isPaused || isHelpOpen || !isMouseDownLeft) {
-                resetMining();
-                return;
+                resetMining(); return;
             }
 
-            const ray = new THREE.Raycaster();
-            ray.setFromCamera(new THREE.Vector2(0,0), camera);
+            const ray = new THREE.Raycaster(); ray.setFromCamera(new THREE.Vector2(0,0), camera);
             const hits = ray.intersectObjects(worldMeshes);
 
             if (hits.length > 0 && hits[0].distance < maxReach) {
@@ -776,59 +821,46 @@
 
                 if (block) {
                     const blockProp = blockProperties[block.type] || { hardness: 0.2, isExplosionResistant: false };
+                    if (block.isStatic && !block.type.startsWith('bed')) { resetMining(); return; }
 
-                    // 檢查方塊是否不可破壞 (如地下的 isStatic 終界石基底)
-                    if (block.isStatic && !block.type.startsWith('bed')) {
-                        resetMining();
-                        return;
-                    }
-
-                    // 如果目標改變，重置時間
                     if (miningTarget !== block) {
-                        miningTarget = block;
-                        miningTime = 0;
+                        resetMining(); 
+                        miningTarget = block; miningTime = 0;
+                        miningTarget.originalMat = targetMesh.material;
+                        const clonedMat = createMat(colorPalette[block.type] || '#ffffff');
+                        clonedMat.map.magFilter = THREE.NearestFilter;
+                        targetMesh.material = clonedMat;
                     }
 
                     miningTime += dt;
                     const requiredTime = blockProp.hardness;
                     const progress = Math.min(1.0, miningTime / requiredTime);
 
-                    // 視覺效果更新：裂痕覆蓋框
                     if (progress > 0) {
-                        crackDecalMesh.position.copy(targetMesh.position);
                         const stage = Math.min(10, Math.ceil(progress * 10));
-                        crackDecalMat.map = crackTextures[stage - 1];
-                        crackDecalMat.needsUpdate = true;
-                        crackDecalMesh.visible = true;
+                        const baseColor = colorPalette[block.type] || '#ffffff';
+                        drawPixelCrackOnCanvas(baseColor, stage);
+                        const ctxImage = tempCtx.getImageData(0, 0, 64, 64);
+                        const texCtx = targetMesh.material.map.image.getContext('2d');
+                        texCtx.putImageData(ctxImage, 0, 0);
+                        targetMesh.material.map.needsUpdate = true;
                     }
 
-                    // 挖掘完成
-                    if (progress >= 1.0) {
-                        const success = removeBlock(targetMesh, true);
-                        if (success) {
-                            resetMining();
-                        }
-                    }
-                } else {
-                    resetMining();
-                }
-            } else {
-                resetMining();
-            }
+                    if (progress >= 1.0 && removeBlock(targetMesh, true)) resetMining();
+                } else resetMining();
+            } else resetMining();
         }
 
         function handleRightClickInteraction() {
             if (!isGameRunning || isSettingsOpen || isChatOpen || isPaused || isHelpOpen) return;
             const item = inventory[selectedSlot];
-            const ray = new THREE.Raycaster();
-            ray.setFromCamera(new THREE.Vector2(0,0), camera);
+            const ray = new THREE.Raycaster(); ray.setFromCamera(new THREE.Vector2(0,0), camera);
             const hits = ray.intersectObjects(worldMeshes);
 
             if (hits.length > 0 && hits[0].distance < maxReach) {
                 const block = worldBlocks.find(b => b.mesh === hits[0].object);
                 const p = block.mesh.position.clone().add(hits[0].face.normal).round();
                 
-                // 支援放置：wool, tnt, obsidian
                 if (item.type !== 'empty' && item.count > 0 && ['wool', 'tnt', 'obsidian'].includes(item.type)) {
                     if(addBlock(p.x, p.y, p.z, item.type)) { item.count--; updateUI(); }
                 } else if (item.type !== 'empty' && item.count > 0) { 
@@ -857,7 +889,6 @@
                 player.vel.add(dir.multiplyScalar(22 * power)); 
             }
             
-            // 爆炸清除週圍存在的掉落物
             for (let i = droppedItems.length - 1; i >= 0; i--) {
                 if (droppedItems[i].mesh.position.distanceTo(pos) < 4.5 * power) {
                     scene.remove(droppedItems[i].mesh);
@@ -865,16 +896,11 @@
                 }
             }
 
-            // 破壞方塊並產生掉落物
             [...worldBlocks].forEach(b => { 
                 const dist = b.mesh.position.distanceTo(pos);
                 if (dist < 4.2 * power) {
                     const blockProp = blockProperties[b.type] || { hardness: 0.2, isExplosionResistant: false };
-
-                    // 檢查方塊是否具有防爆屬性（如黑曜石 obsidian）
-                    if (blockProp.isExplosionResistant) {
-                        return; // 完全不理會爆炸
-                    }
+                    if (blockProp.isExplosionResistant) return; 
 
                     if (b.type === 'tnt') {
                         const pushDir = b.mesh.position.clone().sub(pos).normalize();
@@ -895,10 +921,8 @@
             
             cloudMeshes.forEach(c => { c.position.x += c.userData.speed * (dt * 60); if (c.position.x > 200) c.position.x = -200; });
 
-            // 執行挖掘檢測與時間更新
             handleLeftClickInteraction(dt);
 
-            // 掉落物物理與拾取
             for (let i = droppedItems.length - 1; i >= 0; i--) {
                 let item = droppedItems[i]; item.age += dt; item.vel.y -= 20 * dt; 
                 let nextX = item.mesh.position.x + item.vel.x * dt;
@@ -955,7 +979,7 @@
                 t.data.mesh.position.set(nextX, nextY, nextZ); t.data.vel.x *= 0.98; t.data.vel.z *= 0.98; 
                 t.data.x = t.data.mesh.position.x; t.data.y = t.data.mesh.position.y; t.data.z = t.data.mesh.position.z;
                 t.data.aabb.setFromCenterAndSize(t.data.mesh.position, new THREE.Vector3(1,1,1));
-                t.data.mesh.material = Math.floor(t.timer * 8) % 2 === 0 ? mats.tntActive : mats.tnt;
+                t.data.mesh.material = Math.floor(t.timer * 8) % 2 === 0 ? sharedMats.tntActive : sharedMats.tnt;
                 if (t.fuse <= 0) { explode(t.data.x, t.data.y, t.data.z, 1.6, true); removeBlock(t.data.mesh, false); }
             }
 
@@ -1045,9 +1069,9 @@
                 if (document.pointerLockElement !== canvas) {
                     requestSafePointerLock();
                 } else {
-                    if (e.button === 0) { // 左鍵挖掘
+                    if (e.button === 0) { 
                         isMouseDownLeft = true;
-                    } else if (e.button === 2) { // 右鍵放置
+                    } else if (e.button === 2) { 
                         handleRightClickInteraction();
                     }
                 }
@@ -1055,10 +1079,7 @@
         });
 
         window.addEventListener('mouseup', e => {
-            if (e.button === 0) {
-                isMouseDownLeft = false;
-                resetMining();
-            }
+            if (e.button === 0) { isMouseDownLeft = false; resetMining(); }
         });
 
         canvas.addEventListener('contextmenu', e => e.preventDefault());
@@ -1083,16 +1104,15 @@
             resetMining();
 
             for (let i = 0; i < 20; i++) {
-                const cloud = new THREE.Mesh(new THREE.BoxGeometry(10 + Math.random() * 20, 2, 10 + Math.random() * 20), mats.cloud);
+                const cloud = new THREE.Mesh(new THREE.BoxGeometry(10 + Math.random() * 20, 2, 10 + Math.random() * 20), sharedMats.cloud);
                 cloud.position.set((Math.random() - 0.5) * 300, 40 + Math.random() * 20, (Math.random() - 0.5) * 300);
                 cloud.userData = { speed: 0.05 + Math.random() * 0.1 };
                 scene.add(cloud); cloudMeshes.push(cloud);
             }
-            for(let x=-2; x<=2; x++) for(let z=-2; z<=2; z++) addBlock(x, 0, z, 'grass', true);
+            for(let x=-2; x<=2; x++) for(let z=-2; z<=2; z++) addBlock(x, 0, z, 'grass', true, true);
             const targetZ = -targetDistance;
-            for(let x=-2; x<=2; x++) for(let z=targetZ-2; z<=targetZ+2; z++) addBlock(x, 0, z, 'end', true);
-            // 初始化終點的判定床
-            addBlock(0, 1, targetZ, 'bedHead'); addBlock(0, 1, targetZ + 1, 'bedBody'); 
+            for(let x=-2; x<=2; x++) for(let z=targetZ-2; z<=targetZ+2; z++) addBlock(x, 0, z, 'end', true, true);
+            addBlock(0, 1, targetZ, 'bedHead', true, true); addBlock(0, 1, targetZ + 1, 'bedBody', true, true); 
         }
 
         function animate() { 
